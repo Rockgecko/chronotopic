@@ -1,0 +1,24 @@
+/* styles.css */
+#timeline {
+    width: 90%;
+    height: 500px;
+    margin: 0 auto;
+    border: 1px solid #ccc;
+    position: relative;
+}
+
+.event {
+    fill: var(--event-color, orange);
+    cursor: pointer;
+}
+
+.person {
+    fill: var(--person-color, steelblue);
+    cursor: pointer;
+}
+
+.text-label {
+    font-size: 12px;
+    fill: black;
+    font-family: sans-serif;
+}
