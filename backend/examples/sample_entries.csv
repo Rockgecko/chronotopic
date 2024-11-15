@@ -1,0 +1,5 @@
+type,name,begins,ends,location,details
+person,Charles Darwin,1809-02-12,1882-04-19,Britain,"Naturalist who proposed the theory of evolution by natural selection"
+event,Publication of Origin of Species,1859-11-24,1860-01-01,Britain,"Publication of Darwin's revolutionary book on evolution"
+person,Abraham Lincoln,1809-02-12,1865-04-15,America,"16th US President who led the Union through the Civil War"
+event,American Civil War,1861-04-12,1865-05-09,America,"War between the Union and Confederate states over slavery and states' rights"
