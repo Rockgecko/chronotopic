@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Database management script."""
 from pathlib import Path
+from typing import List
 
 import typer
 from rich import print
@@ -16,6 +17,12 @@ from models import HistoricalEntry, Base
 
 app = typer.Typer(help="Manage historical timeline database")
 console = Console()
+
+def get_db_session(db_path: str = "history.db"):
+    engine = create_engine(f"sqlite:///{db_path}")
+    Base.metadata.create_all(bind=engine)  # Create tables if they don't exist
+    Session = sessionmaker(bind=engine)
+    return Session()
 
 @app.command()
 def clear(
@@ -129,7 +136,7 @@ def list_entries(
     session = Session()
 
     entries = session.query(HistoricalEntry).all()
-    
+
     if not entries:
         print("No entries found in database.")
         return
@@ -151,10 +158,102 @@ def list_entries(
             str(entry.begins),
             str(entry.ends),
             entry.location,
-            (entry.details[:50] + "...") if len(entry.details) > 50 else entry.details
+            (
+                f"{entry.details[:50]}..."
+                if len(entry.details) > 50
+                else entry.details
+            ),
         )
 
     console.print(table)
+
+@app.command()
+def remove_duplicates(
+    db_path: Path = typer.Option(
+        "history.db",
+        "--db",
+        "-d",
+        help="Database file path",
+        exists=False,
+    ),
+):
+    """Remove duplicate entries from the database."""
+    session = get_db_session(db_path)
+    
+    # Get all entries
+    entries = session.query(HistoricalEntry).all()
+    
+    # Track seen entries by their key attributes
+    seen = set()
+    duplicates = []
+    
+    for entry in entries:
+        # Create a tuple of identifying attributes
+        entry_key = (entry.name, entry.type, entry.begins, entry.ends, entry.location)
+        
+        if entry_key in seen:
+            duplicates.append(entry)
+        else:
+            seen.add(entry_key)
+    
+    # Remove duplicates
+    for entry in duplicates:
+        session.delete(entry)
+    
+    session.commit()
+    print(f"Removed {len(duplicates)} duplicate entries")
+
+@app.command()
+def delete_entries(
+    ids: List[int] = typer.Argument(..., help="IDs of entries to delete"),
+    db_path: Path = typer.Option(
+        "history.db",
+        "--db",
+        "-d",
+        help="Database file path",
+        exists=False,
+    ),
+):
+    """Delete specific entries by their IDs."""
+    session = get_db_session(db_path)
+
+    # Get entries by IDs
+    entries = session.query(HistoricalEntry).filter(HistoricalEntry.id.in_(ids)).all()
+    found_ids = {entry.id for entry in entries}
+    if not_found := set(ids) - found_ids:
+        print(f"Warning: Could not find entries with IDs: {', '.join(map(str, not_found))}")
+
+    # Show entries to be deleted
+    if entries:
+        print("\nEntries to be deleted:")
+        table = Table(show_header=True, header_style="bold")
+        table.add_column("ID")
+        table.add_column("Type")
+        table.add_column("Name")
+        table.add_column("Location")
+        table.add_column("Begins")
+        table.add_column("Ends")
+
+        for entry in entries:
+            table.add_row(
+                str(entry.id),
+                entry.type,
+                entry.name,
+                entry.location,
+                str(entry.begins),
+                str(entry.ends)
+            )
+
+        console.print(table)
+
+        # Confirm deletion
+        if typer.confirm("\nDelete these entries?"):
+            for entry in entries:
+                session.delete(entry)
+            session.commit()
+            print(f"Deleted {len(entries)} entries")
+        else:
+            print("Deletion cancelled")
 
 def main():
     app()
