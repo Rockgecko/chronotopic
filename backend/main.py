@@ -1,60 +1,14 @@
-from datetime import date
-
-from fastapi import FastAPI
+from typing import List, Optional
+from pydantic import BaseModel, Field
+from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
 
-from models.models import Base, HistoricalEntry
+from .ingest.base import get_db_session
+from .models import HistoricalEntry, Story
 
-engine = create_engine("sqlite:///history.db")
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-
-Base.metadata.create_all(bind=engine)
-
-
-def add_initial_data():
-    db = SessionLocal()
-    if db.query(HistoricalEntry).count() == 0:
-        entries = [
-            HistoricalEntry(
-                type="event",
-                name="Event A",
-                begins=date(1800, 1, 1),
-                ends=date(1820, 1, 1),
-                location="Europe",
-                details="Details about Event A",
-            ),
-            HistoricalEntry(
-                type="event",
-                name="Event B",
-                begins=date(1850, 1, 1),
-                ends=date(1860, 1, 1),
-                location="America",
-                details="Details about Event B",
-            ),
-            HistoricalEntry(
-                type="person",
-                name="Person X",
-                begins=date(1880, 1, 1),
-                ends=date(1930, 1, 1),
-                location="Asia",
-                details="Biography of Person X",
-            ),
-        ]
-        db.add_all(entries)
-        db.commit()
-    db.close()
-
-
-# Call the function to add initial data
-add_initial_data()
-
-# FastAPI app setup
 app = FastAPI()
 
+# Enable CORS
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -63,41 +17,59 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-
-class HistoricalEntryResponse(BaseModel):
-    id: int
-    type: str
+class StoryBase(BaseModel):
     name: str
-    begins: str
-    ends: str
-    location: str
-    details: str
+    description: Optional[str] = None
+    color: Optional[str] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True
 
+class EntryBase(BaseModel):
+    type: str
+    name: str
+    begins: int = Field(
+        description="Year when the event/person begins. Use negative numbers for BCE (e.g., -500 for 500 BCE) and positive for CE"
+    )
+    ends: int = Field(
+        description="Year when the event/person ends. Use negative numbers for BCE (e.g., -500 for 500 BCE) and positive for CE"
+    )
+    location: str
+    details: Optional[str] = None
+    stories: List[StoryBase] = []
 
-@app.get("/entries/", response_model=list[HistoricalEntryResponse])
+    class Config:
+        from_attributes = True
+
+    @property
+    def begins_formatted(self) -> str:
+        """Format begins year as BCE/CE string."""
+        return f"{abs(self.begins)} {'BCE' if self.begins < 0 else 'CE'}"
+
+    @property
+    def ends_formatted(self) -> str:
+        """Format ends year as BCE/CE string."""
+        return f"{abs(self.ends)} {'BCE' if self.ends < 0 else 'CE'}"
+
+@app.get("/api/entries", response_model=List[EntryBase])
 def get_entries():
-    db = SessionLocal()
-    entries = db.query(HistoricalEntry).all()
-    db.close()
+    """Get all historical entries with their associated stories."""
+    session = get_db_session()
+    entries = session.query(HistoricalEntry).all()
+    return entries
 
-    return [
-        {
-            "id": entry.id,
-            "type": entry.type,
-            "name": entry.name,
-            "begins": (
-                entry.begins.strftime("%Y-%m-%d")
-                if entry.begins
-                else None
-            ),
-            "ends": (
-                entry.ends.strftime("%Y-%m-%d") if entry.ends else None
-            ),
-            "location": entry.location,
-            "details": entry.details,
-        }
-        for entry in entries
-    ]
+@app.get("/api/stories", response_model=List[StoryBase])
+def get_stories():
+    """Get all stories."""
+    session = get_db_session()
+    stories = session.query(Story).all()
+    return stories
+
+@app.get("/api/stories/{story_id}/entries", response_model=List[EntryBase])
+def get_story_entries(story_id: int):
+    """Get all entries for a specific story."""
+    session = get_db_session()
+    story = session.query(Story).filter_by(id=story_id).first()
+    if not story:
+        raise HTTPException(status_code=404, detail="Story not found")
+    return story.entries

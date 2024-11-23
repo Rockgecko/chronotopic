@@ -1,3 +1,3 @@
-from .models import HistoricalEntry, Base
+from .models import HistoricalEntry, Base, Story
 
-__all__ = ['HistoricalEntry', 'Base']
+__all__ = ['HistoricalEntry', 'Base', 'Story']

@@ -13,9 +13,9 @@ from sqlalchemy.orm import sessionmaker
 from ingest.base import clear_database
 from ingest.csv_ingest import load_from_csv
 from ingest.markdown_ingest import load_from_markdown
-from models import HistoricalEntry, Base
+from models import HistoricalEntry, Base, Story
 
-app = typer.Typer(help="Manage historical timeline database")
+app = typer.Typer(help="Manage historical timeline database", pretty_exceptions_enable=False)
 console = Console()
 
 def get_db_session(db_path: str = "history.db"):
@@ -254,6 +254,148 @@ def delete_entries(
             print(f"Deleted {len(entries)} entries")
         else:
             print("Deletion cancelled")
+
+@app.command()
+def list_stories():
+    """List all stories and their entries."""
+    session = get_db_session()
+    stories = session.query(Story).all()
+    
+    if not stories:
+        print("No stories found in database.")
+        return
+    
+    table = Table(title="Stories")
+    table.add_column("ID", style="cyan")
+    table.add_column("Name", style="green")
+    table.add_column("Description")
+    table.add_column("Entry Count", justify="right")
+    
+    for story in stories:
+        table.add_row(
+            str(story.id),
+            story.name,
+            story.description or "",
+            str(len(story.entries))
+        )
+    
+    console.print(table)
+
+@app.command()
+def show_story(
+    story_id: int = typer.Argument(..., help="ID of the story to show")
+):
+    """Show details of a specific story and its entries."""
+    session = get_db_session()
+    story = session.query(Story).filter_by(id=story_id).first()
+    
+    if not story:
+        print(f"Story with ID {story_id} not found.")
+        return
+    
+    # Print story details
+    print(f"\nStory: {story.name}")
+    if story.description:
+        print(f"Description: {story.description}")
+    print(f"Color: {story.color or 'Not set'}")
+    
+    if not story.entries:
+        print("\nNo entries in this story.")
+        return
+    
+    # Print entries
+    table = Table(title=f"Entries in {story.name}")
+    table.add_column("ID")
+    table.add_column("Type")
+    table.add_column("Name")
+    table.add_column("Location")
+    table.add_column("Begins")
+    table.add_column("Ends")
+    
+    for entry in sorted(story.entries, key=lambda x: x.begins):
+        table.add_row(
+            str(entry.id),
+            entry.type,
+            entry.name,
+            entry.location,
+            str(entry.begins),
+            str(entry.ends)
+        )
+    
+    console.print(table)
+
+@app.command()
+def create_story(
+    name: str = typer.Argument(..., help="Name of the story"),
+    description: str = typer.Option(None, "--description", "-d", help="Description of the story"),
+    color: str = typer.Option(None, "--color", "-c", help="Color for visualization (e.g., #FF0000)")
+):
+    """Create a new story."""
+    session = get_db_session()
+    
+    # Check if story already exists
+    if session.query(Story).filter_by(name=name).first():
+        print(f"Story '{name}' already exists.")
+        return
+    
+    story = Story(name=name, description=description, color=color)
+    session.add(story)
+    session.commit()
+    print(f"Created story '{name}' with ID {story.id}")
+
+@app.command()
+def add_to_story(
+    story_id: int = typer.Argument(..., help="ID of the story"),
+    entry_ids: List[int] = typer.Argument(..., help="IDs of entries to add")
+):
+    """Add entries to a story."""
+    session = get_db_session()
+    story = session.query(Story).filter_by(id=story_id).first()
+    
+    if not story:
+        print(f"Story with ID {story_id} not found.")
+        return
+    
+    entries = session.query(HistoricalEntry).filter(HistoricalEntry.id.in_(entry_ids)).all()
+    found_ids = {entry.id for entry in entries}
+    not_found = set(entry_ids) - found_ids
+    
+    if not_found:
+        print(f"Warning: Could not find entries with IDs: {', '.join(map(str, not_found))}")
+    
+    for entry in entries:
+        if entry not in story.entries:
+            story.entries.append(entry)
+    
+    session.commit()
+    print(f"Added {len(entries)} entries to story '{story.name}'")
+
+@app.command()
+def remove_from_story(
+    story_id: int = typer.Argument(..., help="ID of the story"),
+    entry_ids: List[int] = typer.Argument(..., help="IDs of entries to remove")
+):
+    """Remove entries from a story."""
+    session = get_db_session()
+    story = session.query(Story).filter_by(id=story_id).first()
+    
+    if not story:
+        print(f"Story with ID {story_id} not found.")
+        return
+    
+    entries = session.query(HistoricalEntry).filter(HistoricalEntry.id.in_(entry_ids)).all()
+    found_ids = {entry.id for entry in entries}
+    not_found = set(entry_ids) - found_ids
+    
+    if not_found:
+        print(f"Warning: Could not find entries with IDs: {', '.join(map(str, not_found))}")
+    
+    for entry in entries:
+        if entry in story.entries:
+            story.entries.remove(entry)
+    
+    session.commit()
+    print(f"Removed {len(entries)} entries from story '{story.name}'")
 
 def main():
     app()
