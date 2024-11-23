@@ -104,3 +104,18 @@ def sample_events_data():
             "stories": ["Story 2"]
         }
     ]
+
+@pytest.fixture(autouse=True)
+def override_db_path(monkeypatch, test_db):
+    """Override database path to use test database for all functions."""
+    def mock_get_db_session(*args, **kwargs):
+        return test_db
+    
+    monkeypatch.setattr('ingest.base.get_db_session', mock_get_db_session)
+    monkeypatch.setattr('ingest.csv_ingest.get_db_session', mock_get_db_session)
+    monkeypatch.setattr('ingest.markdown_ingest.get_db_session', mock_get_db_session)
+    
+    yield
+    
+    # Reset after test
+    test_db.rollback()

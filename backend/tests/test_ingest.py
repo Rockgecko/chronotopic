@@ -54,8 +54,8 @@ def test_parse_story_names():
 
 def test_csv_ingestion(test_db, sample_csv_file):
     """Test CSV ingestion functionality."""
-    # Test basic ingestion using the test session
-    ingest_csv(sample_csv_file, session=test_db)
+    # Test basic ingestion
+    ingest_csv(sample_csv_file)
     
     # Verify entries were created
     entries = test_db.query(HistoricalEntry).all()
@@ -105,8 +105,8 @@ def test_csv_error_handling(test_db):
 
 def test_markdown_ingestion(test_db, sample_markdown_file):
     """Test markdown ingestion functionality."""
-    # Test basic ingestion using test session
-    ingest_markdown(sample_markdown_file, session=test_db)
+    # Test basic ingestion
+    ingest_markdown(sample_markdown_file)
     
     # Verify story was created
     story = test_db.query(Story).filter_by(name='Test Markdown Story').first()
@@ -126,7 +126,7 @@ def test_markdown_error_handling(test_db):
     """Test markdown ingestion error handling."""
     # Test non-existent file
     with pytest.raises(FileNotFoundError):
-        ingest_markdown(Path('nonexistent.md'), session=test_db)
+        ingest_markdown(Path('nonexistent.md'))
     
     # Test malformed markdown
     with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.md') as f:
@@ -137,7 +137,7 @@ Invalid content
 """)
     
     with pytest.raises(KeyError):
-        ingest_markdown(f.name, session=test_db)
+        ingest_markdown(Path(f.name))
     
     os.unlink(f.name)
     
@@ -149,6 +149,6 @@ name: Incomplete Event
 ---""")
     
     with pytest.raises(KeyError):
-        ingest_markdown(f.name, session=test_db)
+        ingest_markdown(Path(f.name))
     
     os.unlink(f.name)
