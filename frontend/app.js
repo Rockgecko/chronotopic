@@ -133,22 +133,28 @@ function zoomed(event) {
 // Load data from API
 async function loadData() {
     try {
-        const response = await fetch('http://localhost:8000/api/entries');
-        if (!response.ok) throw new Error('Network response was not ok');
-        const data = await response.json();
+        // Fetch both entries and stories
+        const [entriesResponse, storiesResponse] = await Promise.all([
+            fetch('http://localhost:8000/api/entries'),
+            fetch('http://localhost:8000/api/stories')
+        ]);
+        
+        if (!entriesResponse.ok) throw new Error('Failed to fetch entries');
+        if (!storiesResponse.ok) throw new Error('Failed to fetch stories');
+        
+        const [entries, stories] = await Promise.all([
+            entriesResponse.json(),
+            storiesResponse.json()
+        ]);
         
         // Store data globally
-        allData = data;
+        allData = entries;
         
-        // Extract unique stories
-        const stories = new Set();
-        data.forEach(d => d.stories.forEach(s => stories.add(s.name)));
-        
-        // Create story filter buttons
-        createStoryFilter(Array.from(stories));
+        // Create story filter buttons using the stories from the API
+        createStoryFilter(stories.map(s => ({ name: s.name, color: s.color || config.storyColors[s.id % config.storyColors.length] })));
         
         // Initial draw
-        drawVisualization(data);
+        drawVisualization(entries);
     } catch (error) {
         console.error('Error loading data:', error);
         document.getElementById("timeline").innerHTML += `<p style="color: red">Error loading data: ${error.message}</p>`;
@@ -172,13 +178,13 @@ function createStoryFilter(stories) {
         });
     
     // Add story buttons
-    stories.forEach((story, i) => {
+    stories.forEach(story => {
         storyFilter.append("button")
             .attr("class", "story-button")
-            .style("border-color", config.storyColors[i % config.storyColors.length])
-            .text(story)
+            .style("border-color", story.color)
+            .text(story.name)
             .on("click", function() {
-                toggleStory(story, this);
+                toggleStory(story.name, this);
             });
     });
 }
