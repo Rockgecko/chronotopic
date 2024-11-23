@@ -2,16 +2,36 @@
 
 from typing import List
 
-from models import Base, HistoricalEntry
+from models.base import Base
+from models.models import HistoricalEntry  # noqa: F401
 from sqlalchemy import create_engine
-from sqlalchemy.orm import Session, sessionmaker
+from sqlalchemy.orm import sessionmaker
 
 
-def get_db_session(db_path: str = "history.db") -> Session:
-    """Create a database session."""
-    engine = create_engine(f"sqlite:///{db_path}")
-    Base.metadata.create_all(bind=engine)
-    SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+def create_db_engine(db_path: str = "history.db"):
+    """Create a database engine."""
+    return create_engine(
+        f"sqlite:///{db_path}",
+        connect_args={"check_same_thread": False}
+    )
+
+
+_engine = create_db_engine()
+Base.metadata.create_all(bind=_engine)
+
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
+
+
+def get_db_session(db_path: str = "history.db") -> SessionLocal:
+    """Get a database session."""
+    global _engine, SessionLocal
+    
+    # If db_path is different from current engine, create new engine
+    if f"sqlite:///{db_path}" != str(_engine.url):
+        _engine = create_db_engine(db_path)
+        Base.metadata.create_all(bind=_engine)
+        SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=_engine)
+    
     return SessionLocal()
 
 

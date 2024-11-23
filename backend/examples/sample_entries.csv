@@ -1,5 +1,10 @@
-type,name,begins,ends,location,details
-person,Charles Darwin,1809-02-12,1882-04-19,Britain,"Naturalist who proposed the theory of evolution by natural selection"
-event,Publication of Origin of Species,1859-11-24,1860-01-01,Britain,"Publication of Darwin's revolutionary book on evolution"
-person,Abraham Lincoln,1809-02-12,1865-04-15,America,"16th US President who led the Union through the Civil War"
-event,American Civil War,1861-04-12,1865-05-09,America,"War between the Union and Confederate states over slavery and states' rights"
+type,name,begins,ends,location,details,stories
+person,Charles Darwin,1809,1882,Britain,"Naturalist who proposed the theory of evolution by natural selection",
+event,Publication of Origin of Species,1859,1860,Britain,"Publication of Darwin's revolutionary book on evolution",
+person,Abraham Lincoln,1809,1865,America,"16th US President who led the Union through the Civil War",
+event,American Civil War,1861,1865,America,"War between the Union and Confederate states over slavery and states' rights",
+event,World War II,1939,1945,Global,"Major global conflict that reshaped international relations",
+event,Renaissance,1300,1600,Europe,"Cultural rebirth period marked by advances in art and science",
+event,Industrial Revolution,1760,1840,England,"Period of rapid industrialization and technological advancement",
+event,American Revolution,1765,1783,North America,"Colonial uprising leading to American independence",
+event,French Revolution,1789,1799,France,"Period of radical social and political upheaval",
