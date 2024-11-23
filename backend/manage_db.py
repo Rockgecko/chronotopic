@@ -128,13 +128,15 @@ def list_entries(
         help="Database file path",
         exists=False,
     ),
+    show_details: bool = typer.Option(
+        False,
+        "--details",
+        "-s",
+        help="Show entry details",
+    ),
 ):
     """List all entries in the database."""
-    engine = create_engine(f"sqlite:///{db_path}")
-    Base.metadata.create_all(bind=engine)
-    Session = sessionmaker(bind=engine)
-    session = Session()
-
+    session = get_db_session(db_path)
     entries = session.query(HistoricalEntry).all()
 
     if not entries:
@@ -148,7 +150,56 @@ def list_entries(
     table.add_column("Begins", style="yellow")
     table.add_column("Ends", style="yellow")
     table.add_column("Location", style="blue")
-    table.add_column("Details", style="white", no_wrap=False)
+    table.add_column("Stories", style="red")
+    if show_details:
+        table.add_column("Details", style="white", no_wrap=False)
+
+    for entry in entries:
+        story_count = len(entry.stories)
+        story_text = f"{story_count} stor{'ies' if story_count != 1 else 'y'}" if story_count > 0 else "no stories"
+        table.add_row(
+            str(entry.id),
+            entry.type,
+            entry.name,
+            str(entry.begins),
+            str(entry.ends),
+            entry.location,
+            story_text,
+            (
+                f"{entry.details[:50]}..."
+                if len(entry.details) > 50 and show_details
+                else entry.details if show_details
+                else ""
+            ),
+        )
+
+    console.print(table)
+
+@app.command()
+def list_entries_without_stories(
+    db_path: Path = typer.Option(
+        "history.db",
+        "--db",
+        "-d",
+        help="Database file path",
+        exists=False,
+    ),
+):
+    """List all entries that don't have any associated stories."""
+    session = get_db_session(db_path)
+    entries = session.query(HistoricalEntry).filter(~HistoricalEntry.stories.any()).all()
+
+    if not entries:
+        print("No entries found without stories in database.")
+        return
+
+    table = Table(title="Entries Without Stories")
+    table.add_column("ID", style="cyan")
+    table.add_column("Type", style="magenta")
+    table.add_column("Name", style="green")
+    table.add_column("Begins", style="yellow")
+    table.add_column("Ends", style="yellow")
+    table.add_column("Location", style="blue")
 
     for entry in entries:
         table.add_row(
@@ -158,11 +209,6 @@ def list_entries(
             str(entry.begins),
             str(entry.ends),
             entry.location,
-            (
-                f"{entry.details[:50]}..."
-                if len(entry.details) > 50
-                else entry.details
-            ),
         )
 
     console.print(table)

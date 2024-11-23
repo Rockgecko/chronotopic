@@ -25,8 +25,11 @@ The system uses SQLite for data storage (`history.db`). The database schema supp
 All commands should be run from the `backend` directory:
 
 ```bash
-# List all entries
+# List all entries (add --details to show full details)
 uv run --python=3.11 python3 -m manage_db list-entries
+
+# List entries that don't have any stories
+uv run --python=3.11 python3 -m manage_db list-entries-without-stories
 
 # List all stories
 uv run --python=3.11 python3 -m manage_db list-stories
@@ -71,7 +74,35 @@ uv run --python=3.11 python3 -m manage_db load-md examples/steam_power.md
 
 #### CSV Format
 
-Coming soon...
+The system accepts CSV files with the following columns:
+
+- `type`: Type of entry (event/person)
+- `name`: Name of the entry
+- `begins`: Year when the entry begins (negative for BCE)
+- `ends`: Year when the entry ends (negative for BCE)
+- `location`: Location of the entry
+- `details`: Optional detailed description
+- `stories`: Optional semicolon-separated list of story names
+
+Example CSV rows:
+```csv
+type,name,begins,ends,location,details,stories
+event,First Industrial Revolution,1760,1840,England,"The transition to machine manufacturing",Industrial Revolution;Economic History
+event,Building of Parthenon,-447,-432,Greece,"Construction of the Parthenon temple",
+event,Battle of Marathon,-490,-490,Greece,"A pivotal battle",Greek Wars;Ancient Battles
+```
+
+Note: For the stories column:
+
+- Leave empty for entries without stories
+- Separate multiple stories with semicolons
+- Story names can contain spaces but not semicolons
+
+To ingest CSV files:
+
+```bash
+uv run --python=3.11 python3 -m manage_db load-csv examples/industrial_revolution.csv
+```
 
 ## Running the Server
 
