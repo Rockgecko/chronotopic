@@ -4,10 +4,14 @@ const config = {
         event: "#ff7e67",
         person: "#4e89ae"
     },
+    storyColors: d3.schemeCategory10,  // D3's built-in color scheme for stories
     margin: { top: 40, right: 100, bottom: 40, left: 150 },
-    height: 800,
+    height: 600,  // Reduced height
     labelPadding: 5,
-    tooltipDelay: 200
+    tooltipDelay: 200,
+    storyLineOpacity: 0.7,  // Increased opacity
+    storyLineWidth: 3,      // Increased width
+    maxLanes: 3  // Limit maximum number of lanes per location
 };
 
 // Set up SVG canvas for D3
@@ -19,216 +23,392 @@ const tooltip = d3.select("body").append("div")
     .attr("class", "tooltip")
     .style("opacity", 0);
 
+// Create story filter div
+const storyFilter = d3.select("#timeline")
+    .append("div")
+    .attr("class", "story-filter")
+    .style("margin-bottom", "20px");
+
+// Create main SVG
 const svg = d3.select("#timeline")
     .append("svg")
     .attr("width", "100%")
-    .attr("height", height + config.margin.top + config.margin.bottom)
-    .append("g")
+    .attr("height", config.height + config.margin.top + config.margin.bottom)
+    .attr("viewBox", [0, 0, width + config.margin.left + config.margin.right, config.height + config.margin.top + config.margin.bottom])
+    .attr("preserveAspectRatio", "xMidYMid meet");
+
+// Create a group for zoom transformation
+const mainGroup = svg.append("g")
     .attr("transform", `translate(${config.margin.left},${config.margin.top})`);
+
+// Create clip path to prevent drawing outside the timeline area
+svg.append("defs").append("clipPath")
+    .attr("id", "clip")
+    .append("rect")
+    .attr("width", width)
+    .attr("height", config.height);
+
+// Global state
+let activeStories = new Set();  // Track which stories are active
+let allData = [];              // Store all data for filtering
+let currentZoomTransform = d3.zoomIdentity;  // Store current zoom state
+let xScale;  // Make xScale global
+let xAxis;  // Make xAxis global
+
+// Optimized function to calculate vertical offsets
+function calculateVerticalOffsets(events, xScale) {
+    const lanes = new Map(); // Store occupied lanes for each location
+    
+    // Sort events by start time to optimize lane assignment
+    events.sort((a, b) => a.begins - b.begins);
+    
+    events.forEach(event => {
+        if (!lanes.has(event.location)) {
+            lanes.set(event.location, []);
+        }
+        
+        const locationLanes = lanes.get(event.location);
+        const eventStart = xScale(event.begins);
+        const eventEnd = xScale(event.ends);
+        
+        // Find first available lane
+        let laneIndex = 0;
+        while (laneIndex < config.maxLanes) {
+            if (!locationLanes[laneIndex]) {
+                locationLanes[laneIndex] = [];
+                break;
+            }
+            
+            // Check if current lane has space
+            const hasOverlap = locationLanes[laneIndex].some(([start, end]) => {
+                return Math.max(start, eventStart) <= Math.min(end, eventEnd);
+            });
+            
+            if (!hasOverlap) break;
+            laneIndex++;
+        }
+        
+        // If we've exceeded max lanes, put in last lane
+        if (laneIndex >= config.maxLanes) {
+            laneIndex = config.maxLanes - 1;
+        }
+        
+        // Ensure lane array exists
+        if (!locationLanes[laneIndex]) {
+            locationLanes[laneIndex] = [];
+        }
+        
+        // Add event to lane
+        locationLanes[laneIndex].push([eventStart, eventEnd]);
+        event.laneIndex = laneIndex;
+    });
+    
+    return lanes;
+}
+
+// Create zoom behavior
+const zoom = d3.zoom()
+    .scaleExtent([1, 20])  // Min/max zoom level
+    .extent([[0, 0], [width, config.height]])
+    .on("zoom", zoomed);
+
+// Apply zoom behavior to SVG
+svg.call(zoom);
+
+// Zoom function
+function zoomed(event) {
+    currentZoomTransform = event.transform;
+    
+    // Update the transform of the main group
+    mainGroup.attr("transform", `translate(${config.margin.left + event.transform.x},${config.margin.top}) scale(${event.transform.k})`);
+    
+    // Update axes
+    if (xScale) {
+        const newXScale = event.transform.rescaleX(xScale);
+        xAxis.scale(newXScale);
+        d3.select(".x-axis").call(xAxis);
+    }
+}
 
 // Load data from API
 async function loadData() {
     try {
-        const response = await fetch("http://127.0.0.1:8000/entries/");
+        const response = await fetch('http://localhost:8000/api/entries');
+        if (!response.ok) throw new Error('Network response was not ok');
         const data = await response.json();
-
-        // Process data into the correct format
-        data.forEach(d => {
-            d.startDate = new Date(d.begins);
-            d.endDate = new Date(d.ends);
-        });
-
+        
+        // Store data globally
+        allData = data;
+        
+        // Extract unique stories
+        const stories = new Set();
+        data.forEach(d => d.stories.forEach(s => stories.add(s.name)));
+        
+        // Create story filter buttons
+        createStoryFilter(Array.from(stories));
+        
+        // Initial draw
         drawVisualization(data);
     } catch (error) {
-        console.error("Error loading data:", error);
+        console.error('Error loading data:', error);
+        document.getElementById("timeline").innerHTML += `<p style="color: red">Error loading data: ${error.message}</p>`;
     }
+}
+
+// Create story filter buttons
+function createStoryFilter(stories) {
+    // Clear existing buttons
+    storyFilter.html("");
+    
+    // Add "All" button
+    storyFilter.append("button")
+        .attr("class", "story-button active")
+        .text("All")
+        .on("click", function() {
+            // Reset active stories and redraw
+            activeStories.clear();
+            updateButtonStates();
+            drawVisualization(allData);
+        });
+    
+    // Add story buttons
+    stories.forEach((story, i) => {
+        storyFilter.append("button")
+            .attr("class", "story-button")
+            .style("border-color", config.storyColors[i % config.storyColors.length])
+            .text(story)
+            .on("click", function() {
+                toggleStory(story, this);
+            });
+    });
+}
+
+// Toggle story selection
+function toggleStory(story, button) {
+    if (activeStories.has(story)) {
+        activeStories.delete(story);
+    } else {
+        activeStories.add(story);
+    }
+    
+    updateButtonStates();
+    
+    // Filter and redraw data
+    const filteredData = activeStories.size === 0 ? 
+        allData : 
+        allData.filter(d => d.stories.some(s => activeStories.has(s.name)));
+    
+    drawVisualization(filteredData);
+}
+
+// Update button states
+function updateButtonStates() {
+    d3.selectAll(".story-button")
+        .classed("active", function() {
+            const story = d3.select(this).text();
+            return story === "All" ? activeStories.size === 0 : activeStories.has(story);
+        });
 }
 
 // Function to format tooltip content
 function formatTooltip(d) {
-    return `
-        <strong>${d.name}</strong><br/>
-        Type: ${d.type}<br/>
-        Location: ${d.location}<br/>
-        Period: ${d.begins} to ${d.ends}<br/>
-        <hr/>
-        ${d.details}
-    `;
-}
-
-// Function to compute vertical positions for overlapping events
-function computeRows(events, xScale) {
-    // Group events by location
-    const eventsByLocation = d3.group(events, d => d.location);
+    const years = d.begins === d.ends ? 
+        `${Math.abs(d.begins)} ${d.begins < 0 ? 'BCE' : 'CE'}` :
+        `${Math.abs(d.begins)} ${d.begins < 0 ? 'BCE' : 'CE'} - ${Math.abs(d.ends)} ${d.ends < 0 ? 'BCE' : 'CE'}`;
     
-    // For each location, compute rows for overlapping events
-    eventsByLocation.forEach(locationEvents => {
-        // Sort events by start date
-        locationEvents.sort((a, b) => a.startDate - b.startDate);
-        
-        // Initialize rows array
-        const rows = [];
-        
-        // For each event, find the first available row
-        locationEvents.forEach(event => {
-            let rowIndex = 0;
-            let foundRow = false;
-            
-            // Convert dates to pixels for overlap detection
-            const eventStart = xScale(event.startDate);
-            const eventEnd = xScale(event.endDate);
-            
-            // Check each existing row for overlap
-            while (!foundRow && rowIndex < rows.length) {
-                const row = rows[rowIndex];
-                // Check if this event overlaps with any event in this row
-                const hasOverlap = row.some(existingEvent => {
-                    const existingStart = xScale(existingEvent.startDate);
-                    const existingEnd = xScale(existingEvent.endDate);
-                    return !(eventEnd < existingStart || eventStart > existingEnd);
-                });
-                
-                if (!hasOverlap) {
-                    foundRow = true;
-                    row.push(event);
-                } else {
-                    rowIndex++;
-                }
-            }
-            
-            // If no existing row works, create a new one
-            if (!foundRow) {
-                rows.push([event]);
-                rowIndex = rows.length - 1;
-            }
-            
-            // Store the row index with the event
-            event.row = rowIndex;
-        });
-        
-        // Store the total number of rows for this location
-        locationEvents.totalRows = rows.length;
-    });
+    const stories = d.stories.length > 0 ?
+        `<br><br>Stories: ${d.stories.map(s => s.name).join(', ')}` :
+        '';
     
-    return eventsByLocation;
+    return `<strong>${d.name}</strong><br>
+            ${years}<br>
+            Location: ${d.location}
+            ${d.details ? '<br><br>' + d.details : ''}
+            ${stories}`;
 }
 
 // Function to draw visualization
 function drawVisualization(data) {
-    // Create x-scale (timeline)
-    const xScale = d3.scaleTime()
-        .domain([
-            d3.min(data, d => d.startDate),
-            d3.max(data, d => d.endDate)
-        ])
-        .range([0, width])
-        .nice();
-
-    // Create y-scale for swimlanes based on location
+    // Clear existing elements
+    mainGroup.selectAll("*").remove();
+    
+    if (!data || data.length === 0) {
+        document.getElementById("timeline").innerHTML = '<p>No data available to display.</p>';
+        return;
+    }
+    
+    // Create scales
+    const timeExtent = d3.extent(data.flatMap(d => [d.begins, d.ends]));
+    xScale = d3.scaleLinear()
+        .domain(timeExtent)
+        .range([0, width]);
+    
+    // Create y-scale for locations (swimlanes)
     const locations = [...new Set(data.map(d => d.location))];
     const yScale = d3.scaleBand()
         .domain(locations)
-        .range([0, height])
-        .padding(0.3);
-
-    // Compute rows for overlapping events
-    const eventsByLocation = computeRows(data, xScale);
+        .range([0, config.height])
+        .padding(0.2);  // Increased padding between swimlanes
     
-    // Draw x-axis with grid lines
-    const xAxis = d3.axisBottom(xScale)
-        .ticks(d3.timeYear.every(5));
+    // Calculate vertical offsets for events
+    const verticalOffsets = calculateVerticalOffsets(data, xScale);
     
-    svg.append("g")
-        .attr("transform", `translate(0,${height})`)
-        .call(xAxis)
-        .selectAll("text")
-        .style("text-anchor", "end")
-        .attr("dx", "-.8em")
-        .attr("dy", ".15em")
-        .attr("transform", "rotate(-45)");
-
-    // Add x-axis label
-    svg.append("text")
-        .attr("class", "axis-label")
-        .attr("x", width / 2)
-        .attr("y", height + config.margin.bottom - 5)
-        .style("text-anchor", "middle")
-        .text("Time Period");
-
-    // Draw y-axis
+    // Add x-axis with BCE/CE formatting
+    xAxis = d3.axisBottom(xScale)
+        .tickFormat(d => `${Math.abs(d)} ${d < 0 ? 'BCE' : 'CE'}`);
+    
+    mainGroup.append("g")
+        .attr("class", "x-axis axis")
+        .attr("transform", `translate(0,${config.height})`)
+        .call(xAxis);
+    
+    // Add y-axis (locations)
     const yAxis = d3.axisLeft(yScale);
-    svg.append("g")
+    mainGroup.append("g")
+        .attr("class", "y-axis axis")
         .call(yAxis);
-
-    // Add y-axis label
-    svg.append("text")
-        .attr("class", "axis-label")
-        .attr("transform", "rotate(-90)")
-        .attr("x", -height / 2)
-        .attr("y", -config.margin.left + 20)
-        .style("text-anchor", "middle")
-        .text("Location");
-
-    // Plot rectangles representing events/people
-    const bars = svg.selectAll(".period")
+    
+    // Create a group for each location (swimlane)
+    const swimlanes = mainGroup.selectAll(".swimlane")
+        .data(locations)
+        .enter()
+        .append("g")
+        .attr("class", "swimlane")
+        .attr("transform", d => `translate(0,${yScale(d)})`);
+    
+    // Add swimlane background
+    swimlanes.append("rect")
+        .attr("x", 0)
+        .attr("y", 0)
+        .attr("width", width)
+        .attr("height", yScale.bandwidth())
+        .attr("class", "swimlane-bg");
+    
+    // Draw story connection lines
+    const allStories = [...new Set(data.flatMap(d => d.stories.map(s => s.name)))];
+    const storyLinesGroup = mainGroup.append("g")
+        .attr("class", "story-lines")
+        .attr("clip-path", "url(#clip)");
+    
+    // Only draw lines for active stories or all if none are active
+    const activeStoriesArray = Array.from(activeStories);
+    const storiesToDraw = activeStoriesArray.length > 0 ? activeStoriesArray : allStories;
+    
+    storiesToDraw.forEach((story, storyIndex) => {
+        const storyEvents = data.filter(d => d.stories.some(s => s.name === story))
+            .sort((a, b) => a.begins - b.begins);
+        
+        if (storyEvents.length > 1) {
+            const line = d3.line()
+                .x(d => xScale(d.begins) + (xScale(d.ends) - xScale(d.begins)) / 2)
+                .y(d => {
+                    const laneHeight = yScale.bandwidth() / config.maxLanes;
+                    return yScale(d.location) + (d.laneIndex + 0.5) * laneHeight;
+                })
+                .curve(d3.curveMonotoneX);
+            
+            storyLinesGroup.append("path")
+                .datum(storyEvents)
+                .attr("class", "story-line")
+                .attr("d", line)
+                .style("stroke", config.storyColors[storyIndex % config.storyColors.length])
+                .style("stroke-width", config.storyLineWidth)
+                .style("opacity", config.storyLineOpacity);
+        }
+    });
+    
+    // Create event blocks with fixed lane height
+    const laneHeight = yScale.bandwidth() / config.maxLanes;
+    const events = mainGroup.selectAll(".event")
         .data(data)
         .enter()
-        .append("rect")
-        .attr("class", d => d.type === "event" ? "event-rect" : "person-rect")
-        .attr("x", d => xScale(d.startDate))
-        .attr("y", d => {
-            const locationBandHeight = yScale.bandwidth();
-            const location = d.location;
-            const totalRows = eventsByLocation.get(location).totalRows;
-            const rowHeight = locationBandHeight / (totalRows + 1); // +1 for padding
-            return yScale(location) + (d.row * rowHeight);
-        })
-        .attr("width", d => Math.max(2, xScale(d.endDate) - xScale(d.startDate)))
-        .attr("height", d => {
-            const locationBandHeight = yScale.bandwidth();
-            const location = d.location;
-            const totalRows = eventsByLocation.get(location).totalRows;
-            return locationBandHeight / (totalRows + 1) * 0.8; // 0.8 for vertical padding
+        .append("g")
+        .attr("class", "event")
+        .attr("transform", d => {
+            const x = xScale(d.begins);
+            const y = yScale(d.location) + d.laneIndex * laneHeight;
+            return `translate(${x},${y})`;
         });
-
-    // Update text labels
-    svg.selectAll(".text-label")
-        .data(data)
-        .enter()
-        .append("text")
-        .attr("class", "text-label")
-        .attr("x", d => xScale(d.startDate) + (xScale(d.endDate) - xScale(d.startDate)) / 2)
-        .attr("y", d => {
-            const locationBandHeight = yScale.bandwidth();
-            const location = d.location;
-            const totalRows = eventsByLocation.get(location).totalRows;
-            const rowHeight = locationBandHeight / (totalRows + 1);
-            return yScale(location) + (d.row * rowHeight) - 5;
-        })
+    
+    // Add event rectangles
+    const eventHeight = laneHeight * 0.8;  // Leave some vertical padding
+    events.append("rect")
+        .attr("class", "event-rect")
+        .attr("x", 0)
+        .attr("y", laneHeight * 0.1)  // Center in lane
+        .attr("width", d => Math.max(2, xScale(d.ends) - xScale(d.begins)))
+        .attr("height", eventHeight)
+        .style("fill", d => {
+            if (d.stories.length === 0) return config.colors.event;
+            const storyIndex = allStories.indexOf(d.stories[0].name);
+            return config.storyColors[storyIndex % config.storyColors.length];
+        });
+    
+    // Add event labels
+    events.append("text")
+        .attr("class", "event-label")
+        .attr("x", d => (xScale(d.ends) - xScale(d.begins)) / 2)
+        .attr("y", laneHeight / 2)
         .attr("text-anchor", "middle")
-        .text(d => d.name);
-
-    // Add interactivity
-    bars.on("mouseover", function(event, d) {
-            d3.select(this)
-                .style("opacity", 1);
-            
-            tooltip.transition()
-                .duration(200)
-                .style("opacity", .9);
-            
-            tooltip.html(formatTooltip(d))
-                .style("left", (event.pageX + 10) + "px")
-                .style("top", (event.pageY - 10) + "px");
-        })
-        .on("mouseout", function() {
-            d3.select(this)
-                .style("opacity", 0.8);
-            
-            tooltip.transition()
-                .duration(500)
-                .style("opacity", 0);
+        .attr("dy", "0.35em")
+        .text(d => d.name)
+        .each(function(d) {
+            const width = xScale(d.ends) - xScale(d.begins);
+            const bbox = this.getBBox();
+            if (bbox.width > width - 4) {
+                d3.select(this)
+                    .attr("transform", `rotate(-30, ${width/2}, ${laneHeight/2})`)
+                    .attr("text-anchor", "end");
+            }
         });
+    
+    // Add interactivity
+    events.on("mouseover", function(event, d) {
+        d3.select(this).select("rect")
+            .style("opacity", 1);
+        
+        tooltip.transition()
+            .duration(200)
+            .style("opacity", .9);
+        
+        tooltip.html(formatTooltip(d))
+            .style("left", (event.pageX + 10) + "px")
+            .style("top", (event.pageY - 10) + "px");
+        
+        // Highlight associated story lines
+        storyLinesGroup.selectAll(".story-line")
+            .style("opacity", path => {
+                const pathData = d3.select(path).datum();
+                return pathData.some(e => e.stories.some(s => 
+                    d.stories.some(ds => ds.name === s.name)
+                )) ? 1 : 0.1;
+            })
+            .style("stroke-width", path => {
+                const pathData = d3.select(path).datum();
+                return pathData.some(e => e.stories.some(s => 
+                    d.stories.some(ds => ds.name === s.name)
+                )) ? config.storyLineWidth * 2 : config.storyLineWidth;
+            });
+    })
+    .on("mouseout", function() {
+        d3.select(this).select("rect")
+            .style("opacity", 0.8);
+        
+        tooltip.transition()
+            .duration(500)
+            .style("opacity", 0);
+        
+        storyLinesGroup.selectAll(".story-line")
+            .style("opacity", config.storyLineOpacity)
+            .style("stroke-width", config.storyLineWidth);
+    });
+    
+    // Add zoom instructions
+    svg.append("text")
+        .attr("class", "zoom-instructions")
+        .attr("x", 10)
+        .attr("y", 20)
+        .text("Use mouse wheel to zoom, drag to pan");
 }
 
 // Call the function to load and draw data

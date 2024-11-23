@@ -14,63 +14,106 @@ h1 {
 
 #timeline {
     width: 95%;
-    height: 800px;
     margin: 0 auto;
     background-color: white;
     border-radius: 8px;
     box-shadow: 0 2px 4px rgba(0,0,0,0.1);
     padding: 20px;
+    overflow: hidden;
+}
+
+.story-filter {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-bottom: 20px;
+}
+
+.story-button {
+    padding: 6px 12px;
+    border: 2px solid;
+    border-radius: 16px;
+    background: white;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+
+.story-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.story-button.active {
+    background-color: #f0f0f0;
+    transform: translateY(1px);
+    box-shadow: none;
+}
+
+.swimlane-bg {
+    fill: #f8f8f8;
+}
+
+.swimlane-bg:nth-child(even) {
+    fill: #f0f0f0;
 }
 
 .event-rect {
-    fill: #ff944c;
     opacity: 0.8;
-    cursor: pointer;
-    transition: opacity 0.2s;
+    rx: 4;
+    ry: 4;
 }
 
-.person-rect {
-    fill: #4e89ae;
-    opacity: 0.8;
-    cursor: pointer;
-    transition: opacity 0.2s;
-}
-
-.event-rect:hover, .person-rect:hover {
-    opacity: 1;
-}
-
-.text-label {
-    font-size: 12px;
+.event-label {
     fill: #333;
+    font-size: 10px;
     pointer-events: none;
+}
+
+.story-line {
+    fill: none;
+    stroke-linecap: round;
 }
 
 .tooltip {
     position: absolute;
+    background: white;
     padding: 10px;
-    background: rgba(255, 255, 255, 0.95);
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    pointer-events: none;
+    max-width: 300px;
+    font-size: 12px;
+    z-index: 1000;
+}
+
+.zoom-instructions {
+    fill: #666;
+    font-size: 12px;
+}
+
+/* Axis styling */
+.axis path,
+.axis line {
+    stroke: #ccc;
+}
+
+.axis text {
+    fill: #666;
+    font-size: 10px;
+}
+
+#debug {
+    margin: 10px;
+    padding: 10px;
     border: 1px solid #ddd;
     border-radius: 4px;
-    pointer-events: none;
-    font-size: 14px;
-    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-    max-width: 300px;
+    background-color: #f9f9f9;
+    font-family: monospace;
+    white-space: pre-wrap;
+    display: none;
 }
 
-.axis-label {
-    font-size: 14px;
-    fill: #666;
-}
-
-.tick line {
-    stroke: #ddd;
-}
-
-.tick text {
-    fill: #666;
-}
-
-.domain {
-    stroke: #ccc;
+#debug.show {
+    display: block;
 }
