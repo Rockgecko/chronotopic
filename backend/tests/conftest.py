@@ -1,4 +1,4 @@
-"""Test fixtures for the chronotopic application."""
+"""Test fixtures for the Chronotopic application."""
 import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
