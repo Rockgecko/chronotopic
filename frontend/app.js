@@ -227,7 +227,7 @@ function formatTooltip(d) {
         `${Math.abs(d.begins)} ${d.begins < 0 ? 'BCE' : 'CE'} - ${Math.abs(d.ends)} ${d.ends < 0 ? 'BCE' : 'CE'}`;
     
     const stories = d.stories.length > 0 ?
-        `<br><br>Stories: ${d.stories.map(s => s.name).join(', ')}` :
+        `<br><br>Stories: ${d.stories.join(', ')}` :
         '';
     
     return `<strong>${d.name}</strong><br>
