@@ -5,11 +5,19 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Horizontal History Visualization</title>
+    <link href="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/css/select2.min.css" rel="stylesheet" />
     <link rel="stylesheet" href="styles.css">
     <script src="https://d3js.org/d3.v7.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/select2@4.1.0-rc.0/dist/js/select2.min.js"></script>
 </head>
 <body>
     <h1>Horizontal History Visualization</h1>
+    <div id="story-filter-container">
+        <select id="story-select" multiple="multiple" style="width: 100%">
+            <option value="">All Stories</option>
+        </select>
+    </div>
     <div id="debug"></div>
     <div id="timeline"></div>
     <script src="app.js"></script>

@@ -150,7 +150,7 @@ async function loadData() {
         // Store data globally
         allData = entries;
         
-        // Create story filter buttons using the stories from the API
+        // Create story filter select
         createStoryFilter(stories.map(s => ({ name: s.name, color: s.color || config.storyColors[s.id % config.storyColors.length] })));
         
         // Initial draw
@@ -161,58 +161,62 @@ async function loadData() {
     }
 }
 
-// Create story filter buttons
+// Create story filter select
 function createStoryFilter(stories) {
-    // Clear existing buttons
-    storyFilter.html("");
+    // Initialize Select2
+    const select = $('#story-select');
     
-    // Add "All" button
-    storyFilter.append("button")
-        .attr("class", "story-button active")
-        .text("All")
-        .on("click", function() {
-            // Reset active stories and redraw
-            activeStories.clear();
-            updateButtonStates();
-            drawVisualization(allData);
-        });
+    // Clear existing options except the first one (All Stories)
+    select.find('option:not(:first)').remove();
     
-    // Add story buttons
+    // Add story options
     stories.forEach(story => {
-        storyFilter.append("button")
-            .attr("class", "story-button")
-            .style("border-color", story.color)
-            .text(story.name)
-            .on("click", function() {
-                toggleStory(story.name, this);
-            });
+        select.append(new Option(story.name, story.name));
+    });
+    
+    // Initialize Select2 with search
+    select.select2({
+        placeholder: 'Select stories to filter',
+        allowClear: true,
+        width: '100%',
+        templateResult: formatStoryOption,
+        templateSelection: formatStoryOption
+    });
+    
+    // Handle selection changes
+    select.on('change', function(e) {
+        const selectedStories = $(this).val() || [];
+        activeStories.clear();
+        selectedStories.forEach(story => {
+            if (story !== '') { // Skip the "All Stories" option
+                activeStories.add(story);
+            }
+        });
+        
+        // Filter and redraw data
+        const filteredData = activeStories.size === 0 ? 
+            allData : 
+            allData.filter(d => d.stories.some(storyName => activeStories.has(storyName)));
+        
+        drawVisualization(filteredData);
     });
 }
 
-// Toggle story selection
-function toggleStory(story, button) {
-    if (activeStories.has(story)) {
-        activeStories.delete(story);
-    } else {
-        activeStories.add(story);
+// Format story options with colors
+function formatStoryOption(story) {
+    if (!story.id || story.id === '') {
+        return story.text;
     }
     
-    updateButtonStates();
+    // Find the story color
+    const storyData = allData[0].stories.find(s => s.name === story.id);
+    const color = storyData ? storyData.color : config.storyColors[0];
     
-    // Filter and redraw data
-    const filteredData = activeStories.size === 0 ? 
-        allData : 
-        allData.filter(d => d.stories.some(storyName => activeStories.has(storyName)));
-    
-    drawVisualization(filteredData);
-}
-
-// Update button states
-function updateButtonStates() {
-    d3.selectAll(".story-button")
-        .classed("active", function() {
-            const story = d3.select(this).text();
-            return story === "All" ? activeStories.size === 0 : activeStories.has(story);
+    return $('<span>')
+        .text(story.text)
+        .css({
+            'border-left': `4px solid ${color}`,
+            'padding-left': '8px'
         });
 }
 
