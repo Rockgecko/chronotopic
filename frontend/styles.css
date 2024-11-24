@@ -133,8 +133,36 @@ h1 {
     background-color: #f8f9fa;
     border: 1px solid #ddd;
     border-radius: 4px;
-    padding: 4px 8px;
+    padding: 4px 8px 4px 24px;
     margin: 4px;
+    position: relative;
+}
+
+.select2-container--default .select2-selection--multiple .select2-selection__choice__remove {
+    position: absolute;
+    left: 4px;
+    top: 50%;
+    transform: translateY(-50%);
+}
+
+.select2-container--default .select2-selection--multiple .select2-selection__choice[style*="border-left"] {
+    border-left: none !important;
+    padding-left: 24px;
+    position: relative;
+}
+
+.select2-container--default .select2-selection--multiple .select2-selection__choice[style*="border-left"]::after {
+    content: '';
+    position: absolute;
+    left: 20px;
+    top: 0;
+    bottom: 0;
+    width: 4px;
+    background-color: inherit;
+}
+
+.select2-container--default .select2-selection--multiple .select2-selection__choice__display {
+    margin-right: 8px;
 }
 
 .select2-container--default .select2-results__option--highlighted[aria-selected] {

@@ -111,7 +111,7 @@ function calculateVerticalOffsets(events, xScale) {
 // Create zoom behavior
 const zoom = d3.zoom()
     .scaleExtent([1, 20])  // Min/max zoom level
-    .extent([[0, 0], [width, config.height]])
+    .translateExtent([[0, -Infinity], [width, Infinity]])  // Allow vertical panning
     .on("zoom", zoomed);
 
 // Apply zoom behavior to SVG
@@ -122,7 +122,7 @@ function zoomed(event) {
     currentZoomTransform = event.transform;
     
     // Update the transform of the main group
-    mainGroup.attr("transform", `translate(${config.margin.left + event.transform.x},${config.margin.top}) scale(${event.transform.k})`);
+    mainGroup.attr("transform", event.transform);
     
     // Update axes
     if (xScale) {
