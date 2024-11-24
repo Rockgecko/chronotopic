@@ -55,6 +55,7 @@ let currentZoomTransform = d3.zoomIdentity;  // Store current zoom state
 let xScale;  // Make xScale global
 let xAxis;  // Make xAxis global
 let allStories = [];
+let focusedEvent = null;
 
 // Optimized function to calculate vertical offsets
 function calculateVerticalOffsets(events, xScale) {
@@ -355,51 +356,91 @@ function drawVisualization(data) {
     // Add event labels
     events.append("text")
         .attr("class", "event-label")
-        .attr("x", 0)  // Start at the beginning of the rectangle
+        .attr("x", 0)
         .attr("y", laneHeight / 2)
         .attr("text-anchor", "end")
         .attr("transform", d => `rotate(-30, 0, ${laneHeight/2})`)
-        .text(d => d.name);
-    
+        .text(d => d.name)
+        .style("opacity", 1);  // Initial opacity
+
     // Add interactivity
     events.on("mouseover", function(event, d) {
-        d3.select(this).select("rect")
-            .style("opacity", 1);
-        
-        tooltip.transition()
-            .duration(200)
-            .style("opacity", .9);
-        
-        tooltip.html(formatTooltip(d))
-            .style("left", (event.pageX + 10) + "px")
-            .style("top", (event.pageY - 10) + "px");
-        
-        // Highlight associated story lines
-        storyLinesGroup.selectAll(".story-line")
-            .style("opacity", path => {
-                const pathData = d3.select(path).datum();
-                return pathData.some(e => e.stories.some(s => 
-                    d.stories.some(ds => ds.name === s.name)
-                )) ? 1 : 0.1;
-            })
-            .style("stroke-width", path => {
-                const pathData = d3.select(path).datum();
-                return pathData.some(e => e.stories.some(s => 
-                    d.stories.some(ds => ds.name === s.name)
-                )) ? config.storyLineWidth * 2 : config.storyLineWidth;
-            });
+        if (!focusedEvent) {  // Only highlight on hover if no event is focused
+            d3.select(this).select("rect")
+                .style("opacity", 1);
+            
+            tooltip.transition()
+                .duration(200)
+                .style("opacity", .9);
+            
+            tooltip.html(formatTooltip(d))
+                .style("left", (event.pageX + 10) + "px")
+                .style("top", (event.pageY - 10) + "px");
+            
+            // Highlight associated story lines
+            storyLinesGroup.selectAll(".story-line")
+                .style("opacity", path => {
+                    const pathData = d3.select(path).datum();
+                    return pathData.some(e => e.stories.some(s => 
+                        d.stories.includes(s)
+                    )) ? 1 : 0.1;
+                })
+                .style("stroke-width", path => {
+                    const pathData = d3.select(path).datum();
+                    return pathData.some(e => e.stories.some(s => 
+                        d.stories.includes(s)
+                    )) ? config.storyLineWidth * 2 : config.storyLineWidth;
+                });
+        }
     })
-    .on("mouseout", function() {
-        d3.select(this).select("rect")
-            .style("opacity", 0.8);
+    .on("mouseout", function(event, d) {
+        if (!focusedEvent) {  // Only reset on mouseout if no event is focused
+            d3.select(this).select("rect")
+                .style("opacity", 0.8);
+            
+            tooltip.transition()
+                .duration(500)
+                .style("opacity", 0);
+            
+            // Reset story lines
+            storyLinesGroup.selectAll(".story-line")
+                .style("opacity", config.storyLineOpacity)
+                .style("stroke-width", config.storyLineWidth);
+        }
+    })
+    .on("click", function(event, d) {
+        event.stopPropagation();  // Prevent click from bubbling to SVG
         
-        tooltip.transition()
-            .duration(500)
-            .style("opacity", 0);
-        
-        storyLinesGroup.selectAll(".story-line")
-            .style("opacity", config.storyLineOpacity)
-            .style("stroke-width", config.storyLineWidth);
+        if (focusedEvent === d) {
+            // If clicking the focused event, unfocus it
+            focusedEvent = null;
+            d3.selectAll(".event text")
+                .transition()
+                .duration(200)
+                .style("opacity", 1);
+        } else {
+            // Focus this event
+            focusedEvent = d;
+            d3.selectAll(".event text")
+                .transition()
+                .duration(200)
+                .style("opacity", 0.1);
+            d3.select(this).select("text")
+                .transition()
+                .duration(200)
+                .style("opacity", 1);
+        }
+    });
+
+    // Add click handler to SVG to clear focus when clicking background
+    svg.on("click", function() {
+        if (focusedEvent) {
+            focusedEvent = null;
+            d3.selectAll(".event text")
+                .transition()
+                .duration(200)
+                .style("opacity", 1);
+        }
     });
     
     // Add zoom instructions
