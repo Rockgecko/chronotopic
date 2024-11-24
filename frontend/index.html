@@ -13,13 +13,48 @@
 </head>
 <body>
     <h1>Horizontal History Visualization</h1>
-    <div id="story-filter-container">
-        <select id="story-select" multiple="multiple" style="width: 100%">
-            <option value="">All Stories</option>
-        </select>
+    <div class="filter-container">
+        <div class="filter-section">
+            <label>Stories:</label>
+            <select id="story-select" multiple="multiple" style="width: 100%">
+                <option value="">All Stories</option>
+            </select>
+        </div>
+        <div class="filter-section">
+            <label>Locations:</label>
+            <select id="location-select" multiple="multiple" style="width: 100%">
+                <option value="">All Locations</option>
+            </select>
+        </div>
+        <div class="filter-section date-filters">
+            <div class="date-input">
+                <label>Start Date:</label>
+                <div class="date-control">
+                    <input type="number" id="start-year" placeholder="Year">
+                    <select id="start-era">
+                        <option value="BCE">BCE</option>
+                        <option value="CE">CE</option>
+                    </select>
+                </div>
+            </div>
+            <div class="date-input">
+                <label>End Date:</label>
+                <div class="date-control">
+                    <input type="number" id="end-year" placeholder="Year">
+                    <select id="end-era">
+                        <option value="BCE">BCE</option>
+                        <option value="CE" selected>CE</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+        <div class="filter-section">
+            <button id="reset-filters" class="reset-button">Reset All Filters</button>
+        </div>
     </div>
     <div id="debug"></div>
     <div id="timeline"></div>
+    <script src="config.js"></script>
     <script src="app.js"></script>
 </body>
 </html>

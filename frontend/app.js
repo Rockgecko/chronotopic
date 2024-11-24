@@ -1,5 +1,6 @@
 // Configurable variables
 const config = {
+    apiBaseUrl: CONFIG.apiBaseUrl,
     colors: {
         event: "#ff7e67",
         person: "#4e89ae"
@@ -29,7 +30,19 @@ const storyFilter = d3.select("#timeline")
     .attr("class", "story-filter")
     .style("margin-bottom", "20px");
 
-// Create main SVG
+// Create location filter div
+const locationFilter = d3.select("#timeline")
+    .append("div")
+    .attr("class", "location-filter")
+    .style("margin-bottom", "20px");
+
+// Create date filter div
+const dateFilter = d3.select("#timeline")
+    .append("div")
+    .attr("class", "date-filter")
+    .style("margin-bottom", "20px");
+
+// Create main SVG and group for visualization
 const svg = d3.select("#timeline")
     .append("svg")
     .attr("width", "100%")
@@ -39,7 +52,7 @@ const svg = d3.select("#timeline")
 
 // Create a group for zoom transformation
 const mainGroup = svg.append("g")
-    .attr("transform", `translate(${config.margin.left},${config.margin.top})`);
+    .attr("transform", `translate(${config.margin.left}, ${config.margin.top})`);
 
 // Create clip path to prevent drawing outside the timeline area
 svg.append("defs").append("clipPath")
@@ -49,13 +62,155 @@ svg.append("defs").append("clipPath")
     .attr("height", config.height);
 
 // Global state
-let activeStories = new Set();  // Track which stories are active
-let allData = [];              // Store all data for filtering
-let currentZoomTransform = d3.zoomIdentity;  // Store current zoom state
-let xScale;  // Make xScale global
-let xAxis;  // Make xAxis global
-let allStories = [];
-let focusedEvent = null;
+let xScale;
+let xAxis;
+let allData;
+let allStories;
+let activeStories = new Set();
+let activeLocations = new Set();
+let timeRange = {
+    start: null,
+    end: null
+};
+
+// Helper function to convert year and era to numeric year
+function yearToNumeric(year, era) {
+    if (!year) return null;
+    return era === 'BCE' ? -Math.abs(year) : Math.abs(year);
+}
+
+// Helper function to initialize date inputs
+function initializeDateInputs(data) {
+    const timeExtent = d3.extent(data.flatMap(d => [d.begins, d.ends]));
+    const startYear = Math.abs(timeExtent[0]);
+    const endYear = new Date().getFullYear();
+    
+    // Set initial values
+    document.getElementById('start-year').value = startYear;
+    document.getElementById('start-era').value = timeExtent[0] < 0 ? 'BCE' : 'CE';
+    document.getElementById('end-year').value = endYear;
+    document.getElementById('end-era').value = 'CE';
+    
+    // Add event listeners
+    ['start-year', 'end-year', 'start-era', 'end-era'].forEach(id => {
+        document.getElementById(id).addEventListener('change', () => {
+            const startYear = document.getElementById('start-year').value;
+            const startEra = document.getElementById('start-era').value;
+            const endYear = document.getElementById('end-year').value;
+            const endEra = document.getElementById('end-era').value;
+            
+            timeRange.start = yearToNumeric(startYear, startEra);
+            timeRange.end = yearToNumeric(endYear, endEra);
+            
+            if (timeRange.start !== null && timeRange.end !== null) {
+                drawVisualization(filterData(allData));
+            }
+        });
+    });
+}
+
+// Create story filter select
+function createStoryFilter(stories) {
+    // Initialize Select2
+    const select = $('#story-select');
+    
+    // Clear existing options except the first one (All Stories)
+    select.find('option:not(:first)').remove();
+    
+    // Add story options
+    stories.forEach(story => {
+        select.append(new Option(story.name, story.name));
+    });
+    
+    // Initialize Select2 with search
+    select.select2({
+        placeholder: 'Select stories to filter',
+        allowClear: true,
+        width: '100%',
+        templateResult: formatStoryOption,
+        templateSelection: formatStoryOption
+    });
+    
+    // Handle selection changes
+    select.on('change', function(e) {
+        const selectedStories = $(this).val() || [];
+        activeStories.clear();
+        selectedStories.forEach(story => {
+            if (story !== '') { // Skip the "All Stories" option
+                activeStories.add(story);
+            }
+        });
+        
+        // Filter and redraw data
+        const filteredData = activeStories.size === 0 ? 
+            allData : 
+            allData.filter(d => d.stories.some(storyName => activeStories.has(storyName)));
+        
+        drawVisualization(filteredData);
+    });
+}
+
+// Create location filter select
+function createLocationFilter(locations) {
+    const select = $('#location-select');
+    
+    // Clear existing options except the first one (All Locations)
+    select.find('option:not(:first)').remove();
+    
+    // Add location options
+    locations.forEach(location => {
+        select.append(new Option(location, location));
+    });
+    
+    // Initialize Select2
+    select.select2({
+        placeholder: 'Select locations to filter',
+        allowClear: true,
+        width: '100%'
+    });
+    
+    // Handle selection changes
+    select.on('change', function(e) {
+        const selectedLocations = $(this).val() || [];
+        activeLocations.clear();
+        selectedLocations.forEach(location => {
+            if (location !== '') {
+                activeLocations.add(location);
+            }
+        });
+        
+        drawVisualization(filterData(allData));
+    });
+}
+
+// Format story options with colors
+function formatStoryOption(story) {
+    if (!story.id || story.id === '') {
+        return story.text;
+    }
+    
+    // Get story index for consistent coloring
+    const storyIndex = allStories.indexOf(story.id);
+    const color = config.storyColors[storyIndex % config.storyColors.length];
+    
+    return $('<span>')
+        .text(story.text)
+        .css({
+            'border-left': `4px solid ${color}`,
+            'padding-left': '8px'
+        });
+}
+
+// Filter data based on active filters
+function filterData(data) {
+    return data.filter(d => {
+        const matchesStories = activeStories.size === 0 || 
+            d.stories.some(storyName => activeStories.has(storyName));
+        const matchesLocations = activeLocations.size === 0 || 
+            activeLocations.has(d.location);
+        return matchesStories && matchesLocations;
+    });
+}
 
 // Optimized function to calculate vertical offsets
 function calculateVerticalOffsets(events, xScale) {
@@ -119,10 +274,9 @@ svg.call(zoom);
 
 // Zoom function
 function zoomed(event) {
-    currentZoomTransform = event.transform;
-    
-    // Update the transform of the main group
-    mainGroup.attr("transform", event.transform);
+    // Combine the margin transform with the zoom transform
+    const transform = event.transform;
+    mainGroup.attr("transform", `translate(${transform.x + config.margin.left}, ${transform.y + config.margin.top}) scale(${transform.k})`);
     
     // Update axes
     if (xScale) {
@@ -130,97 +284,6 @@ function zoomed(event) {
         xAxis.scale(newXScale);
         d3.select(".x-axis").call(xAxis);
     }
-}
-
-// Load data from API
-async function loadData() {
-    try {
-        // Fetch both entries and stories
-        const [entriesResponse, storiesResponse] = await Promise.all([
-            fetch('http://localhost:8000/api/entries'),
-            fetch('http://localhost:8000/api/stories')
-        ]);
-        
-        if (!entriesResponse.ok) throw new Error('Failed to fetch entries');
-        if (!storiesResponse.ok) throw new Error('Failed to fetch stories');
-        
-        const [entries, stories] = await Promise.all([
-            entriesResponse.json(),
-            storiesResponse.json()
-        ]);
-        
-        // Store data globally
-        allData = entries;
-        allStories = stories.map(s => s.name);
-        
-        // Create story filter select
-        createStoryFilter(stories);
-        
-        // Initial draw
-        drawVisualization(entries);
-    } catch (error) {
-        console.error('Error loading data:', error);
-        document.getElementById("timeline").innerHTML += `<p style="color: red">Error loading data: ${error.message}</p>`;
-    }
-}
-
-// Create story filter select
-function createStoryFilter(stories) {
-    // Initialize Select2
-    const select = $('#story-select');
-    
-    // Clear existing options except the first one (All Stories)
-    select.find('option:not(:first)').remove();
-    
-    // Add story options
-    stories.forEach(story => {
-        select.append(new Option(story.name, story.name));
-    });
-    
-    // Initialize Select2 with search
-    select.select2({
-        placeholder: 'Select stories to filter',
-        allowClear: true,
-        width: '100%',
-        templateResult: formatStoryOption,
-        templateSelection: formatStoryOption
-    });
-    
-    // Handle selection changes
-    select.on('change', function(e) {
-        const selectedStories = $(this).val() || [];
-        activeStories.clear();
-        selectedStories.forEach(story => {
-            if (story !== '') { // Skip the "All Stories" option
-                activeStories.add(story);
-            }
-        });
-        
-        // Filter and redraw data
-        const filteredData = activeStories.size === 0 ? 
-            allData : 
-            allData.filter(d => d.stories.some(storyName => activeStories.has(storyName)));
-        
-        drawVisualization(filteredData);
-    });
-}
-
-// Format story options with colors
-function formatStoryOption(story) {
-    if (!story.id || story.id === '') {
-        return story.text;
-    }
-    
-    // Get story index for consistent coloring
-    const storyIndex = allStories.indexOf(story.id);
-    const color = config.storyColors[storyIndex % config.storyColors.length];
-    
-    return $('<span>')
-        .text(story.text)
-        .css({
-            'border-left': `4px solid ${color}`,
-            'padding-left': '8px'
-        });
 }
 
 // Function to format tooltip content
@@ -254,8 +317,13 @@ function drawVisualization(data) {
     const timeExtent = d3.extent(data.flatMap(d => [d.begins, d.ends]));
     const currentYear = new Date().getFullYear();
     const timeBuffer = Math.abs(timeExtent[1] - timeExtent[0]) * 0.05; // Add 5% buffer
+    
+    // Use custom time range if set, otherwise use data extent
+    const domainStart = timeRange.start !== null ? timeRange.start : timeExtent[0] - timeBuffer;
+    const domainEnd = timeRange.end !== null ? timeRange.end : currentYear;
+    
     xScale = d3.scaleLinear()
-        .domain([timeExtent[0] - timeBuffer, currentYear])
+        .domain([domainStart, domainEnd])
         .range([0, width]);
     
     // Create y-scale for locations (swimlanes)
@@ -450,6 +518,78 @@ function drawVisualization(data) {
         .attr("x", 10)
         .attr("y", 20)
         .text("Use mouse wheel to zoom, drag to pan");
+}
+
+// Helper function to reset all filters
+function resetFilters() {
+    // Reset story select
+    $('#story-select').val(null).trigger('change');
+    activeStories.clear();
+    
+    // Reset location select
+    $('#location-select').val(null).trigger('change');
+    activeLocations.clear();
+    
+    // Reset date inputs
+    const timeExtent = d3.extent(allData.flatMap(d => [d.begins, d.ends]));
+    const startYear = Math.abs(timeExtent[0]);
+    const endYear = new Date().getFullYear();
+    
+    document.getElementById('start-year').value = startYear;
+    document.getElementById('start-era').value = timeExtent[0] < 0 ? 'BCE' : 'CE';
+    document.getElementById('end-year').value = endYear;
+    document.getElementById('end-era').value = 'CE';
+    
+    timeRange.start = null;
+    timeRange.end = null;
+    
+    // Reset zoom transform
+    svg.transition()
+        .duration(750)
+        .call(zoom.transform, d3.zoomIdentity);
+        
+    // Redraw visualization
+    drawVisualization(allData);
+}
+
+// Load data from API
+async function loadData() {
+    try {
+        const response = await fetch(`${CONFIG.apiBaseUrl}/api/entries`);
+        if (!response.ok) {
+            throw new Error(`HTTP error! status: ${response.status}`);
+        }
+        const text = await response.text();
+        let entries;
+        try {
+            entries = JSON.parse(text);
+        } catch (e) {
+            console.error('Response text:', text);
+            throw new Error('Failed to parse JSON response: ' + e.message);
+        }
+        
+        // Get unique stories
+        const stories = [...new Set(entries.flatMap(d => d.stories))].map(name => ({ name }));
+        
+        // Store data globally
+        allData = entries;
+        allStories = stories.map(s => s.name);
+        
+        // Create filters
+        createStoryFilter(stories);
+        createLocationFilter([...new Set(entries.map(d => d.location))]);
+        initializeDateInputs(entries);
+        
+        // Add reset button handler
+        document.getElementById('reset-filters').addEventListener('click', resetFilters);
+        
+        // Initial draw
+        drawVisualization(entries);
+    } catch (error) {
+        console.error('Error loading data:', error);
+        console.error('Full error details:', error.stack);
+        document.getElementById("timeline").innerHTML = `<p style="color: red">Error loading data: ${error.message}</p>`;
+    }
 }
 
 // Call the function to load and draw data
