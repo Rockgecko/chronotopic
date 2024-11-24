@@ -8,15 +8,16 @@ A dynamic historical timeline visualization built with D3.js that displays histo
 
 - **Location-based Swimlanes**: Events are organized in horizontal lanes by location
 - **Event Blocks**:
-  - Color-coded by story
+  - Color-coded based on event type
   - Automatically stacked when overlapping (max 3 layers)
   - Shows event name, dates, and location
   - Hover for detailed information
+  - Click to focus on a specific event (reduces opacity for text on other events)
 
 ### Story Connections
 
-- **Story Lines**: Connecting lines between related events
-- **Dynamic Filtering**: Toggle story visibility with filter buttons
+- **Story Lines**: Connecting lines between related events, coloured based on story
+- **Dynamic Filtering**: Toggle story visibility with the story filter (multi-select)
 - **Interactive Highlighting**:
   - Hover over events to highlight related story connections
   - Other story lines fade to help focus attention
@@ -28,6 +29,13 @@ A dynamic historical timeline visualization built with D3.js that displays histo
 - **Time Scale**: Supports both BCE and CE dates
 - **Responsive**: Adapts to window size
 
+### Filtering
+
+In addition to the story filter, the following filtering options are available:
+
+- **Location**: Select specific locations to focus on (multi-select)
+- **Date Range**: Set a custom date range
+
 ### Visual Design
 
 - **Event Layout**:
@@ -35,7 +43,6 @@ A dynamic historical timeline visualization built with D3.js that displays histo
   - Maximum 3 lanes per location to prevent overcrowding
   - Rotated labels for better readability in narrow events
 - **Color Scheme**:
-  - Alternating swimlane backgrounds
   - Story-based event colors
   - Configurable opacity and line widths
 
@@ -67,7 +74,9 @@ A dynamic historical timeline visualization built with D3.js that displays histo
 frontend/
 ├── index.html      # Main HTML file
 ├── app.js          # Core visualization logic
+├── config.js       # Configuration settings (edit backend URL here if needed)
 └── styles.css      # Styling and layout
+
 ```
 
 ### Key Components
