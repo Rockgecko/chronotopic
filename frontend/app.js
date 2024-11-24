@@ -253,8 +253,9 @@ function drawVisualization(data) {
     // Create scales
     const timeExtent = d3.extent(data.flatMap(d => [d.begins, d.ends]));
     const currentYear = new Date().getFullYear();
+    const timeBuffer = Math.abs(timeExtent[1] - timeExtent[0]) * 0.05; // Add 5% buffer
     xScale = d3.scaleLinear()
-        .domain([timeExtent[0], currentYear])
+        .domain([timeExtent[0] - timeBuffer, currentYear])
         .range([0, width]);
     
     // Create y-scale for locations (swimlanes)

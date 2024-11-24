@@ -127,6 +127,8 @@ h1 {
 .select2-container--default .select2-selection--multiple {
     border-radius: 4px;
     border: 1px solid #ccc;
+    min-height: 38px !important;
+    padding-top: 4px !important;
 }
 
 .select2-container--default .select2-selection--multiple .select2-selection__choice {
@@ -163,6 +165,17 @@ h1 {
 
 .select2-container--default .select2-selection--multiple .select2-selection__choice__display {
     margin-right: 8px;
+}
+
+.select2-container--default .select2-selection--multiple .select2-selection__placeholder {
+    margin-top: 0;
+    line-height: 28px;
+}
+
+.select2-container--default .select2-search--inline .select2-search__field {
+    margin-top: 0 !important;
+    height: 28px !important;
+    line-height: 28px !important;
 }
 
 .select2-container--default .select2-results__option--highlighted[aria-selected] {
