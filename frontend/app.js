@@ -54,6 +54,7 @@ let allData = [];              // Store all data for filtering
 let currentZoomTransform = d3.zoomIdentity;  // Store current zoom state
 let xScale;  // Make xScale global
 let xAxis;  // Make xAxis global
+let allStories = [];
 
 // Optimized function to calculate vertical offsets
 function calculateVerticalOffsets(events, xScale) {
@@ -149,9 +150,10 @@ async function loadData() {
         
         // Store data globally
         allData = entries;
+        allStories = stories.map(s => s.name);
         
         // Create story filter select
-        createStoryFilter(stories.map(s => ({ name: s.name, color: s.color || config.storyColors[s.id % config.storyColors.length] })));
+        createStoryFilter(stories);
         
         // Initial draw
         drawVisualization(entries);
@@ -208,9 +210,9 @@ function formatStoryOption(story) {
         return story.text;
     }
     
-    // Find the story color
-    const storyData = allData[0].stories.find(s => s.name === story.id);
-    const color = storyData ? storyData.color : config.storyColors[0];
+    // Get story index for consistent coloring
+    const storyIndex = allStories.indexOf(story.id);
+    const color = config.storyColors[storyIndex % config.storyColors.length];
     
     return $('<span>')
         .text(story.text)
@@ -249,8 +251,9 @@ function drawVisualization(data) {
     
     // Create scales
     const timeExtent = d3.extent(data.flatMap(d => [d.begins, d.ends]));
+    const currentYear = new Date().getFullYear();
     xScale = d3.scaleLinear()
-        .domain(timeExtent)
+        .domain([timeExtent[0], currentYear])
         .range([0, width]);
     
     // Create y-scale for locations (swimlanes)
@@ -295,7 +298,6 @@ function drawVisualization(data) {
         .attr("class", "swimlane-bg");
     
     // Draw story connection lines
-    const allStories = [...new Set(data.flatMap(d => d.stories.map(s => s.name)))];
     const storyLinesGroup = mainGroup.append("g")
         .attr("class", "story-lines")
         .attr("clip-path", "url(#clip)");
@@ -304,8 +306,8 @@ function drawVisualization(data) {
     const activeStoriesArray = Array.from(activeStories);
     const storiesToDraw = activeStoriesArray.length > 0 ? activeStoriesArray : allStories;
     
-    storiesToDraw.forEach((story, storyIndex) => {
-        const storyEvents = data.filter(d => d.stories.some(s => s.name === story))
+    storiesToDraw.forEach(story => {
+        const storyEvents = data.filter(d => d.stories.includes(story))
             .sort((a, b) => a.begins - b.begins);
         
         if (storyEvents.length > 1) {
@@ -321,7 +323,7 @@ function drawVisualization(data) {
                 .datum(storyEvents)
                 .attr("class", "story-line")
                 .attr("d", line)
-                .style("stroke", config.storyColors[storyIndex % config.storyColors.length])
+                .style("stroke", config.storyColors[allStories.indexOf(story) % config.storyColors.length])
                 .style("stroke-width", config.storyLineWidth)
                 .style("opacity", config.storyLineOpacity);
         }
@@ -348,29 +350,16 @@ function drawVisualization(data) {
         .attr("y", laneHeight * 0.1)  // Center in lane
         .attr("width", d => Math.max(2, xScale(d.ends) - xScale(d.begins)))
         .attr("height", eventHeight)
-        .style("fill", d => {
-            if (d.stories.length === 0) return config.colors.event;
-            const storyIndex = allStories.indexOf(d.stories[0].name);
-            return config.storyColors[storyIndex % config.storyColors.length];
-        });
+        .style("fill", d => config.colors[d.type]);  // Color based on type only
     
     // Add event labels
     events.append("text")
         .attr("class", "event-label")
-        .attr("x", d => (xScale(d.ends) - xScale(d.begins)) / 2)
+        .attr("x", 0)  // Start at the beginning of the rectangle
         .attr("y", laneHeight / 2)
-        .attr("text-anchor", "middle")
-        .attr("dy", "0.35em")
-        .text(d => d.name)
-        .each(function(d) {
-            const width = xScale(d.ends) - xScale(d.begins);
-            const bbox = this.getBBox();
-            if (bbox.width > width - 4) {
-                d3.select(this)
-                    .attr("transform", `rotate(-30, ${width/2}, ${laneHeight/2})`)
-                    .attr("text-anchor", "end");
-            }
-        });
+        .attr("text-anchor", "end")
+        .attr("transform", d => `rotate(-30, 0, ${laneHeight/2})`)
+        .text(d => d.name);
     
     // Add interactivity
     events.on("mouseover", function(event, d) {
