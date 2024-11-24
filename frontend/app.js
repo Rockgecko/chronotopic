@@ -202,7 +202,7 @@ function toggleStory(story, button) {
     // Filter and redraw data
     const filteredData = activeStories.size === 0 ? 
         allData : 
-        allData.filter(d => d.stories.some(s => activeStories.has(s.name)));
+        allData.filter(d => d.stories.some(storyName => activeStories.has(storyName)));
     
     drawVisualization(filteredData);
 }
